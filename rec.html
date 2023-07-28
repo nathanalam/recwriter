@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<head>
+  <title>RecWriter</title>
+  <!-- Latest compiled and minified CSS -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap.min.css"
+    integrity="sha384-BVYiiSIFeK1dGmJRAkycuHAHRg32OmUcww7on3RYdg4Va+PmSTsz/K68vbdEjh4u"
+    crossorigin="anonymous"
+  />
+
+  <!-- Optional theme -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap@3.3.7/dist/css/bootstrap-theme.min.css"
+    integrity="sha384-rHyoN1iRsVXV4nD0JutlnGaslCJuC7uwjduW9SVrLvRYooPp2bWYgmgJQIXwl/Sp"
+    crossorigin="anonymous"
+  />
+  <style>
+    body {
+      background-color: whitesmoke;
+      color: darkslategrey;
+      font-family: "Times New Roman", Times, serif;
+      padding: 2em;
+    }
+  </style>
+</head>
+<body>
+  <h1>RecWriter</h1>
+  <p>
+    This is a tool for helping write a recommendation letter. This is backed by
+    the GPT-3.5 LLM model, so there are no strict rules for the input.
+  </p>
+  <p>
+    Note that this data is NOT handled as PII, and is simply sent to a
+    serverless API that queries OpenAI. Technically, there is a paper trail with
+    the built in logging on AWS, so if you would simply like to generate a query
+    instead, click "Submit for Query". If you don't care, go ahead and use
+    "Submit for AI" to actually generate the letter.
+  </p>
+  <form>
+    <h3>Basics</h3>
+    <p>Who are you writing this letter for?</p>
+    <input id="subjectName" type="text" />
+    <p>What is the purpose of the letter?</p>
+    <input id="purpose" type="text" />
+    <p>How long should the letter be?</p>
+    <input id="size" type="text" />
+    <h3>Additional Details</h3>
+    <input type="button" value="Add Detail" onclick="addDetail()" /><br /><br />
+    <div id="attributes"></div>
+    <h3>Submission</h3>
+    <input type="button" value="Submit for Query" onclick="generateQuery()" />
+    <input type="button" value="Submit for AI" onclick="sendRequest()" />
+  </form>
+  <p>Please enter what you have for your recommendation letter below:</p>
+  <textarea id="recommendationLetter" rows="100" cols="100"></textarea>
+  <script>
+    const detailArray = [];
+
+    function updateDetail(detailIndex, detailName, detailValue) {
+      setInputDisabled(true);
+      detailArray[detailIndex]["name"] = detailName;
+      detailArray[detailIndex]["value"] = detailValue;
+      updateDetailDiv();
+      setInputDisabled(false);
+    }
+
+    function addDetail() {
+      setInputDisabled(true);
+      const detail = {
+        name: "",
+        value: "",
+      };
+      detailArray.push(detail);
+      updateDetailDiv();
+      setInputDisabled(false);
+    }
+
+    function removeDetail(detailIndex) {
+      setInputDisabled(true);
+      detailArray.splice(detailIndex, 1);
+      updateDetailDiv();
+      setInputDisabled(false);
+    }
+
+    function setInputDisabled(disableStatus) {
+      const userInputs = document.querySelectorAll("input");
+      userInputs.forEach((input) => {
+        input.disabled = disableStatus;
+      });
+    }
+
+    function updateDetailDiv() {
+      setInputDisabled(true);
+      const detailDiv = document.getElementById("attributes");
+      detailDiv.innerHTML = "";
+      detailArray.forEach((detail, index) => {
+        const detailName = detail["name"];
+        const detailValue = detail["value"];
+
+        detailDiv.innerHTML += `<input type="text" value="${detailName}" onblur="updateDetail(${index}, this.value, '${detailValue}')"> : <input type="text" value="${detailValue}" onblur="updateDetail(${index}, '${detailName}', this.value)"> <input type="button" onclick="removeDetail(${index})" value="X"> <br><br>`;
+      });
+      setInputDisabled(false);
+    }
+
+    function populateQueryContent() {
+      const subjectName = document.getElementById("subjectName").value;
+      const purpose = document.getElementById("purpose").value;
+      const size = document.getElementById("size").value;
+      const currentLetter = document.getElementById(
+        "recommendationLetter"
+      ).value;
+
+      var queryText = `Can you help me write a recommendation letter for ${subjectName}? The purpose of this letter is: ${purpose}. I would like for the size of the letter to be approximately ${size}.`;
+
+      if (detailArray.length > 0) {
+        queryText += `\n\nI have the following additional details that may be useful:\n\n`;
+        detailArray.forEach((detail) => {
+          queryText += `* ${detail["name"]}: ${detail["value"]}\n`;
+        });
+      }
+
+      if (currentLetter.length > 0) {
+        queryText += `\n\nThe current letter is as follows:\n\n ${currentLetter}.`;
+      }
+
+      return queryText;
+    }
+
+    function writeRecommendationLetter(content) {
+      const outputArea = document.getElementById("recommendationLetter");
+      outputArea.value = content;
+    }
+
+    function generateQuery() {
+      writeRecommendationLetter(populateQueryContent());
+    }
+
+    function sendRequest() {
+      setInputDisabled(true);
+      var xhr = new XMLHttpRequest();
+      xhr.open(
+        "POST",
+        "https://pe3eojqxai.execute-api.us-east-1.amazonaws.com/prod/"
+      );
+      xhr.setRequestHeader("Content-Type", "application/json");
+      xhr.send(
+        JSON.stringify([
+          {
+            role: "system",
+            content:
+              "You are an AI tool for assisting with writing recommendation letters",
+          },
+          { role: "user", content: populateQueryContent() },
+        ])
+      );
+      xhr.addEventListener("readystatechange", function () {
+        if (this.status == 200 && this.readyState == 4) {
+          setInputDisabled(false);
+          const response = JSON.parse(this.responseText);
+          const responseMessage = response["choices"][0]["message"]["content"];
+          writeRecommendationLetter(responseMessage);
+        } else if (this.readyState == 4) {
+          setInputDisabled(false);
+          writeRecommendationLetter(
+            `Sorry, I had an error. Status ${this.status}. Please try again.`
+          );
+        }
+      });
+    }
+  </script>
+</body>
