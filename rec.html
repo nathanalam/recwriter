@@ -55,8 +55,22 @@
   </form>
   <p>Please enter what you have for your recommendation letter below:</p>
   <textarea id="recommendationLetter" rows="100" cols="100"></textarea>
+  <br /><br />
+  <button onclick="generateShareLink()">Share</button>
+  <br /><br />
+  <textarea id="shareLink" rows="3" cols="100"></textarea>
   <script>
     const detailArray = [];
+
+    // initiliaze with URL params, if there are any
+    const searchParams = new URLSearchParams(window.location.search);
+    if (searchParams.size > 0) {
+      const paramMap = {}
+      searchParams.forEach((value, param) => {
+        paramMap[param] = value;
+      });
+      populateSiteContent(paramMap["subjectName"], paramMap["purpose"], paramMap["size"], paramMap["currentLetter"], paramMap["detailString"]);
+    }
 
     function updateDetail(detailIndex, detailName, detailValue) {
       setInputDisabled(true);
@@ -104,7 +118,22 @@
       setInputDisabled(false);
     }
 
-    function populateQueryContent() {
+    function populateSiteContent(subjectName, purpose, size, currentLetter, detailString) {
+      document.getElementById("subjectName").value = subjectName;
+      document.getElementById("purpose").value = purpose;
+      document.getElementById("size").value = size;
+      document.getElementById("recommendationLetter").value = currentLetter;
+      
+      const newDetailArray = detailString.split('\n').map((detail) => {
+        const [name, value] = detail.substr("* ".length).split(": ");
+        return { name, value };
+      });
+      detailArray.splice(0, detailArray.length, ...newDetailArray);
+      updateDetailDiv();
+      generateShareLink();
+    }
+
+    function extractSiteContent() {
       const subjectName = document.getElementById("subjectName").value;
       const purpose = document.getElementById("purpose").value;
       const size = document.getElementById("size").value;
@@ -112,13 +141,32 @@
         "recommendationLetter"
       ).value;
 
+      const detailString = detailArray
+       .map((detail) => {
+          return "* " + detail["name"] + ": " + detail["value"];
+        })
+       .join("\n");
+
+      const siteContent = [
+        subjectName,
+        purpose,
+        size,
+        currentLetter,
+        detailString,
+      ];
+
+      return siteContent;
+    }
+
+    function populateQueryContent() {
+      const [subjectName, purpose, size, currentLetter, detailString] = extractSiteContent();
+      
+
       var queryText = `Can you help me write a recommendation letter for ${subjectName}? The purpose of this letter is: ${purpose}. I would like for the size of the letter to be approximately ${size}.`;
 
-      if (detailArray.length > 0) {
+      if (detailString.length > 0) {
         queryText += `\n\nI have the following additional details that may be useful:\n\n`;
-        detailArray.forEach((detail) => {
-          queryText += `* ${detail["name"]}: ${detail["value"]}\n`;
-        });
+        queryText += detailString;
       }
 
       if (currentLetter.length > 0) {
@@ -168,6 +216,16 @@
           );
         }
       });
+    }
+
+    function generateShareLink() {
+      const [subjectName, purpose, size, currentLetter, detailString] = extractSiteContent();
+      const linkBase = window.location.href;
+      const linkSearch = '?subjectName=' + encodeURIComponent(subjectName).replace('&purpose=', "purpose=") + '&purpose=' + encodeURIComponent(purpose).replace('&size=', "size=") + '&size=' + encodeURIComponent(size).replace('&currentLetter=', "currentLetter=") + '&currentLetter=' + encodeURIComponent(currentLetter).replace('&detailString=', "detailString=") + '&detailString=' + encodeURIComponent(detailString);
+      // const linkParams = linkSearch.split('?')[1].split('&').map(cleanLinkParam).join('&');
+      const link = linkBase + linkSearch;
+      const shareLink = document.getElementById("shareLink");
+      shareLink.value = link;
     }
   </script>
 </body>
